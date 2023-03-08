@@ -69,13 +69,8 @@ References
     """
 
 import wrapper as wp
-import os
 import ee
 
-# 设置VPN代理服务器地址和端口
-os.environ['HTTP_PROXY'] = 'http://127.0.0.1:5188'
-os.environ['HTTPS_PROXY'] = 'http://127.0.0.1:5188'
-ee.Initialize()
 
 # /***************************/
 # // MAIN
@@ -91,8 +86,8 @@ roi = ee.Geometry.Polygon(
         ]
     ]
 )
-parameter = {'START_DATE': '2021-09-01',
-             'STOP_DATE': '2021-09-02',
+parameter = {'START_DATE': '2023-02-28',
+             'STOP_DATE': '2023-03-10',
              'POLARIZATION': 'VV',
              'PLATFORM_NUMBER': 'A',
              'ORBIT': 'BOTH',

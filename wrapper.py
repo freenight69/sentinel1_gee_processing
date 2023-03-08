@@ -17,7 +17,11 @@ import helper
 
 # VPN port
 geemap.set_proxy(port=5188)
-ee.Initialize()
+try:
+    ee.Initialize()
+except:
+    ee.Authenticate()
+    ee.Initialize()
 
 
 ###########################################
@@ -36,7 +40,7 @@ def s1_preproc(params):
     Raises
     ------
     ValueError
-        
+
 
     Returns
     -------
@@ -102,34 +106,34 @@ def s1_preproc(params):
         ORBIT = 'DESCENDING'
 
     pol_required = ['VV', 'VH', 'VVVH', 'HH', 'HV', 'HHHV']
-    if (POLARIZATION not in pol_required):
+    if POLARIZATION not in pol_required:
         raise ValueError("ERROR!!! Parameter POLARIZATION not correctly defined")
 
     orbit_required = ['ASCENDING', 'DESCENDING', 'BOTH']
-    if (ORBIT not in orbit_required):
+    if ORBIT not in orbit_required:
         raise ValueError("ERROR!!! Parameter ORBIT not correctly defined")
 
     model_required = ['DIRECT', 'VOLUME']
-    if (TERRAIN_FLATTENING_MODEL not in model_required):
+    if TERRAIN_FLATTENING_MODEL not in model_required:
         raise ValueError("ERROR!!! Parameter TERRAIN_FLATTENING_MODEL not correctly defined")
 
     format_required = ['LINEAR', 'DB']
-    if (FORMAT not in format_required):
+    if FORMAT not in format_required:
         raise ValueError("ERROR!!! FORMAT not correctly defined")
 
     frame_needed = ['MONO', 'MULTI']
-    if (SPECKLE_FILTER_FRAMEWORK not in frame_needed):
+    if SPECKLE_FILTER_FRAMEWORK not in frame_needed:
         raise ValueError("ERROR!!! SPECKLE_FILTER_FRAMEWORK not correctly defined")
 
     format_sfilter = ['BOXCAR', 'LEE', 'GAMMA MAP'
         , 'REFINED LEE', 'LEE SIGMA']
-    if (SPECKLE_FILTER not in format_sfilter):
+    if SPECKLE_FILTER not in format_sfilter:
         raise ValueError("ERROR!!! SPECKLE_FILTER not correctly defined")
 
-    if (TERRAIN_FLATTENING_ADDITIONAL_LAYOVER_SHADOW_BUFFER < 0):
+    if TERRAIN_FLATTENING_ADDITIONAL_LAYOVER_SHADOW_BUFFER < 0:
         raise ValueError("ERROR!!! TERRAIN_FLATTENING_ADDITIONAL_LAYOVER_SHADOW_BUFFER not correctly defined")
 
-    if (SPECKLE_FILTER_KERNEL_SIZE <= 0):
+    if SPECKLE_FILTER_KERNEL_SIZE <= 0:
         raise ValueError("ERROR!!! SPECKLE_FILTER_KERNEL_SIZE not correctly defined")
 
     ###########################################
@@ -143,38 +147,48 @@ def s1_preproc(params):
         .filterDate(START_DATE, STOP_DATE) \
         .filterBounds(ROI)
 
-    if (PLATFORM_NUMBER == 'A' or PLATFORM_NUMBER == 'B'):
+    if PLATFORM_NUMBER == 'A' or PLATFORM_NUMBER == 'B':
         s1 = s1.filter(ee.Filter.eq('platform_number', PLATFORM_NUMBER))
 
-    if (ORBIT_NUM != None):
+    if ORBIT_NUM is not None:
         s1 = s1.filter(ee.Filter.eq('relativeOrbitNumber_start', ORBIT_NUM))
         # .filter(ee.Filter.eq('relativeOrbitNumber_start',None))
 
     # select orbit
-    if (ORBIT != 'BOTH'):
+    if ORBIT != 'BOTH':
         s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', ORBIT))
 
     # select polarization
-    if (POLARIZATION == 'VV'):
+    if POLARIZATION == 'VV':
         s1 = s1.select(['VV', 'angle'])
-    elif (POLARIZATION == 'VH'):
+    elif POLARIZATION == 'VH':
         s1 = s1.select(['VH', 'angle'])
-    elif (POLARIZATION == 'VVVH'):
+    elif POLARIZATION == 'VVVH':
         s1 = s1.select(['VV', 'VH', 'angle'])
-    elif (POLARIZATION == 'HH'):
+    elif POLARIZATION == 'HH':
         s1 = s1.select(['HH', 'angle'])
-    elif (POLARIZATION == 'HV'):
+    elif POLARIZATION == 'HV':
         s1 = s1.select(['HV', 'angle'])
-    elif (POLARIZATION == 'HHHV'):
+    elif POLARIZATION == 'HHHV':
         s1 = s1.select(['HHHV', 'angle'])
 
     print('Number of images in collection: ', s1.size().getInfo())
+
+    # Get ImageCollection footprint list
+    sizeRaw = s1.size().getInfo()
+    imlistRaw = s1.toList(sizeRaw)
+    footprintList = []
+    for idx in range(0, sizeRaw):
+        img = imlistRaw.get(idx)
+        img = ee.Image(img)
+        footprint = ee.Geometry(img.get('system:footprint'))
+        footprintList.append(footprint)
 
     ###########################################
     # 2. ADDITIONAL BORDER NOISE CORRECTION
     ###########################################
 
-    if (APPLY_BORDER_NOISE_CORRECTION):
+    if APPLY_BORDER_NOISE_CORRECTION:
         s1_1 = s1.map(bnc.f_mask_edges)
         print('Additional border noise correction is completed')
     else:
@@ -183,8 +197,8 @@ def s1_preproc(params):
     # 3. SPECKLE FILTERING
     #######################
 
-    if (APPLY_SPECKLE_FILTERING):
-        if (SPECKLE_FILTER_FRAMEWORK == 'MONO'):
+    if APPLY_SPECKLE_FILTERING:
+        if SPECKLE_FILTER_FRAMEWORK == 'MONO':
             s1_1 = ee.ImageCollection(sf.MonoTemporal_Filter(s1_1, SPECKLE_FILTER_KERNEL_SIZE, SPECKLE_FILTER))
             print('Mono-temporal speckle filtering is completed')
         else:
@@ -196,7 +210,7 @@ def s1_preproc(params):
     # 4. TERRAIN CORRECTION
     #######################
 
-    if (APPLY_TERRAIN_FLATTENING):
+    if APPLY_TERRAIN_FLATTENING:
         s1_1 = (trf.slope_correction(s1_1
                                      , TERRAIN_FLATTENING_MODEL
                                      , DEM
@@ -207,15 +221,15 @@ def s1_preproc(params):
     # 5. OUTPUT
     #######################
 
-    if (FORMAT == 'DB'):
+    if FORMAT == 'DB':
         s1_1 = s1_1.map(helper.lin_to_db)
 
     # clip to roi
-    if (CLIP_TO_ROI):
+    if CLIP_TO_ROI:
         s1_1 = s1_1.map(lambda image: image.clip(ROI))
 
-    # save to asset    
-    if (SAVE_ASSET):
+    # save to asset
+    if SAVE_ASSET:
 
         size = s1_1.size().getInfo()
         imlist = s1_1.toList(size)
@@ -235,8 +249,8 @@ def s1_preproc(params):
             task.start()
             print('Exporting {} to {}'.format(name, assetId))
 
-    # save to local   
-    if (SAVE_LOCAL):
+    # save to local
+    if SAVE_LOCAL:
 
         size = s1_1.size().getInfo()
         imlist = s1_1.toList(size)
@@ -248,13 +262,16 @@ def s1_preproc(params):
             # save raw images to local
             if not os.path.exists(LOCAL_DIR):
                 os.makedirs(LOCAL_DIR)
-            filename = os.path.join(LOCAL_DIR, name + '.tif')
-            print('Downloading Raw Image: {} to {}'.format(name, filename))
-            geemap.download_ee_image(img, filename, region=ROI, crs='EPSG:4326', scale=10)
+            filenameRaw = os.path.join(LOCAL_DIR, name + '.tif')
+            print('Downloading Raw Image: {} to {}'.format(name, filenameRaw))
+            if CLIP_TO_ROI:
+                geemap.download_ee_image(img, filenameRaw, region=ROI, crs='EPSG:4326', scale=10)
+            else:
+                geemap.download_ee_image(img, filenameRaw, region=footprintList[idx], crs='EPSG:4326', scale=10)
 
             # save visualization images to local
-            if (VISUALIZATION):
-                if (len(POLARIZATION) > 2):
+            if VISUALIZATION:
+                if len(POLARIZATION) > 2:
                     raise ValueError("ERROR!!! Only can convert single band image into an 32-int gray image")
                 img = img.select([POLARIZATION])
                 visImage = img.visualize(**{
@@ -265,6 +282,10 @@ def s1_preproc(params):
                 })
                 filename = os.path.join(LOCAL_DIR, name + '_VIS.tif')
                 print('Downloading Visualization Image to {}'.format(filename))
-                geemap.download_ee_image(visImage, filename, region=ROI, crs='EPSG:4326', scale=10, dtype='int32')
+                if CLIP_TO_ROI:
+                    geemap.download_ee_image(visImage, filename, region=ROI, crs='EPSG:4326', scale=10, dtype='int32')
+                else:
+                    geemap.download_ee_image(visImage, filename, region=footprintList[idx], crs='EPSG:4326', scale=10,
+                                             dtype='int32')
 
     return s1_1
