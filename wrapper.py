@@ -71,7 +71,10 @@ def s1_preproc(params):
     SAVE_ASSET = params['SAVE_ASSET']
     ASSET_ID = params['ASSET_ID']
     SAVE_LOCAL = params['SAVE_LOCAL']
+    EXPORT_CRS = params['EXPORT_CRS']
+    EXPORT_SCALE = params['EXPORT_SCALE']
     VISUALIZATION = params['VISUALIZATION']
+    RENDER_SCALE = params['RENDER_SCALE']
     LOCAL_DIR = params['LOCAL_DIR']
 
     ###########################################
@@ -104,6 +107,12 @@ def s1_preproc(params):
         FORMAT = 'DB'
     if ORBIT is None:
         ORBIT = 'DESCENDING'
+    if EXPORT_CRS is None:
+        EXPORT_CRS = 'EPSG:4326'
+    if EXPORT_SCALE is None:
+        EXPORT_SCALE = 10
+    if RENDER_SCALE is None:
+        RENDER_SCALE = 100
 
     pol_required = ['VV', 'VH', 'VVVH', 'HH', 'HV', 'HHHV']
     if POLARIZATION not in pol_required:
@@ -159,19 +168,21 @@ def s1_preproc(params):
         s1 = s1.filter(ee.Filter.eq('orbitProperties_pass', ORBIT))
 
     # select polarization
+    polar_bands = []
     if POLARIZATION == 'VV':
-        s1 = s1.select(['VV', 'angle'])
+        polar_bands = ['VV', 'angle']
     elif POLARIZATION == 'VH':
-        s1 = s1.select(['VH', 'angle'])
+        polar_bands = ['VH', 'angle']
     elif POLARIZATION == 'VVVH':
-        s1 = s1.select(['VV', 'VH', 'angle'])
+        polar_bands = ['VV', 'VH', 'angle']
     elif POLARIZATION == 'HH':
-        s1 = s1.select(['HH', 'angle'])
+        polar_bands = ['HH', 'angle']
     elif POLARIZATION == 'HV':
-        s1 = s1.select(['HV', 'angle'])
+        polar_bands = ['HV', 'angle']
     elif POLARIZATION == 'HHHV':
-        s1 = s1.select(['HHHV', 'angle'])
+        polar_bands = ['HHHV', 'angle']
 
+    s1 = s1.select(polar_bands)
     print('Number of images in collection: ', s1.size().getInfo())
 
     # Get ImageCollection footprint list
@@ -244,7 +255,7 @@ def s1_preproc(params):
                                                  assetId=assetId,
                                                  description=description,
                                                  region=s1_1.geometry(),
-                                                 scale=10,
+                                                 scale=EXPORT_SCALE,
                                                  maxPixels=1e13)
             task.start()
             print('Exporting {} to {}'.format(name, assetId))
@@ -265,27 +276,52 @@ def s1_preproc(params):
             filenameRaw = os.path.join(LOCAL_DIR, name + '.tif')
             print('Downloading Raw Image: {} to {}'.format(name, filenameRaw))
             if CLIP_TO_ROI:
-                geemap.download_ee_image(img, filenameRaw, region=ROI, crs='EPSG:4326', scale=10)
+                geemap.download_ee_image(img,
+                                         filenameRaw,
+                                         region=ROI,
+                                         crs=EXPORT_CRS,
+                                         scale=EXPORT_SCALE)
             else:
-                geemap.download_ee_image(img, filenameRaw, region=footprintList[idx], crs='EPSG:4326', scale=10)
+                geemap.download_ee_image(img,
+                                         filenameRaw,
+                                         region=footprintList[idx],
+                                         crs=EXPORT_CRS,
+                                         scale=EXPORT_SCALE)
 
             # save visualization images to local
             if VISUALIZATION:
                 if len(POLARIZATION) > 2:
-                    raise ValueError("ERROR!!! Only can convert single band image into an 32-int gray image")
-                img = img.select([POLARIZATION])
-                visImage = img.visualize(**{
-                    'bands': [POLARIZATION],
-                    'min': -25,
-                    'max': 0.0,
-                    'gamma': 1.0
-                })
-                filename = os.path.join(LOCAL_DIR, name + '_VIS.tif')
+                    # raise ValueError("ERROR!!! Only can convert single band image into an 32-int gray image")
+                    img = img.select([POLARIZATION])
+                    visImage = img.visualize(**{
+                        'bands': polar_bands,
+                        'min': [-25, -25, 30],
+                        'max': [0, 0, 45],
+                        'gamma': 1.0
+                    })
+                else:
+                    img = img.select([POLARIZATION])
+                    visImage = img.visualize(**{
+                        'bands': [POLARIZATION],
+                        'min': -25,
+                        'max': 0.0,
+                        'gamma': 1.0
+                    })
+                filename = os.path.join(LOCAL_DIR, name + '_render.tif')
                 print('Downloading Visualization Image to {}'.format(filename))
                 if CLIP_TO_ROI:
-                    geemap.download_ee_image(visImage, filename, region=ROI, crs='EPSG:4326', scale=10, dtype='int32')
+                    geemap.download_ee_image(visImage,
+                                             filename,
+                                             region=ROI,
+                                             crs=EXPORT_CRS,
+                                             scale=RENDER_SCALE,
+                                             dtype='int32')
                 else:
-                    geemap.download_ee_image(visImage, filename, region=footprintList[idx], crs='EPSG:4326', scale=10,
+                    geemap.download_ee_image(visImage,
+                                             filename,
+                                             region=footprintList[idx],
+                                             crs=EXPORT_CRS,
+                                             scale=RENDER_SCALE,
                                              dtype='int32')
 
     return s1_1
