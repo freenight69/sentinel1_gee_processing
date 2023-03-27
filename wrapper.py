@@ -292,7 +292,7 @@ def s1_preproc(params):
             if VISUALIZATION:
                 if len(POLARIZATION) > 2:
                     # raise ValueError("ERROR!!! Only can convert single band image into an 32-int gray image")
-                    img = img.select([POLARIZATION])
+                    img = img.select(polar_bands)
                     visImage = img.visualize(**{
                         'bands': polar_bands,
                         'min': [-25, -25, 30],
@@ -307,21 +307,13 @@ def s1_preproc(params):
                         'max': 0.0,
                         'gamma': 1.0
                     })
-                filename = os.path.join(LOCAL_DIR, name + '_render.tif')
-                print('Downloading Visualization Image to {}'.format(filename))
+                filename_render = os.path.join(LOCAL_DIR, name + '_render.tif')
+                print('Downloading Visualization Image to {}'.format(filename_render))
                 if CLIP_TO_ROI:
-                    geemap.download_ee_image(visImage,
-                                             filename,
-                                             region=ROI,
-                                             crs=EXPORT_CRS,
-                                             scale=RENDER_SCALE,
-                                             dtype='int32')
+                    # geemap.download_ee_image(visImage, filename_render, region=ROI, crs=EXPORT_CRS, scale=RENDER_SCALE, dtype='int32')
+                    geemap.ee_export_image(visImage, filename=filename_render, crs=EXPORT_CRS, scale=RENDER_SCALE, region=ROI)
                 else:
-                    geemap.download_ee_image(visImage,
-                                             filename,
-                                             region=footprintList[idx],
-                                             crs=EXPORT_CRS,
-                                             scale=RENDER_SCALE,
-                                             dtype='int32')
+                    # geemap.download_ee_image(visImage, filename_render, region=footprintList[idx], crs=EXPORT_CRS, scale=RENDER_SCALE, dtype='int32')
+                    geemap.ee_export_image(visImage, filename=filename_render, crs=EXPORT_CRS, scale=RENDER_SCALE, region=footprintList[idx])
 
     return s1_1
